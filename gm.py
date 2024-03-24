@@ -15,8 +15,20 @@ dataset = load_dataset("daekeun-ml/naver-news-summarization-ko")
 
 BASE_MODEL = "google/gemma-7b-it"
 
-model = AutoModelForCausalLM.from_pretrained(BASE_MODEL, device_map="auto")
+#model = AutoModelForCausalLM.from_pretrained(BASE_MODEL, device_map="auto")
+#tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL, add_special_tokens=True)
+
+bnb_config = BitsAndBytesConfig(
+    load_in_4bit=True,
+    bnb_4bit_quant_type="nf4",
+    bnb_4bit_compute_dtype=torch.float16
+)
+
+BASE_MODEL = "google/gemma-7b-it"
+
+model = AutoModelForCausalLM.from_pretrained(BASE_MODEL, device_map="auto", quantization_config=bnb_config)
 tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL, add_special_tokens=True)
+tokenizer.padding_side = 'right'
 
 doc = dataset['train']['document'][0]
 pipe = pipeline("text-generation", model=model, tokenizer=tokenizer, max_new_tokens=512)
@@ -38,4 +50,53 @@ outputs = pipe(
     add_special_tokens=True
 )
 
-print(outputs[0]["generated_text"][len(prompt):])
+# print(outputs[0]["generated_text"][len(prompt):])
+
+def generate_prompt(example):
+    prompt_list = []
+    for i in range(len(example['document'])):
+        prompt_list.append(r"""<bos><start_of_turn>user
+다음 글을 요약해주세요:
+
+{}<end_of_turn>
+<start_of_turn>model
+{}<end_of_turn><eos>""".format(example['document'][i], example['summary'][i]))
+    return prompt_list
+
+train_data = dataset['train']
+# print(generate_prompt(train_data[:1])[0])
+
+lora_config = LoraConfig(
+    r=6,
+    lora_alpha = 8,
+    lora_dropout = 0.05,
+    target_modules=["q_proj", "o_proj", "k_proj", "v_proj", "gate_proj", "up_proj", "down_proj"],
+    task_type="CAUSAL_LM",
+)
+
+
+
+
+trainer = SFTTrainer(
+    model=model,
+    train_dataset=train_data,
+    max_seq_length=512,
+    args=TrainingArguments(
+        output_dir="outputs",
+#        num_train_epochs = 1,
+        max_steps=3000,
+        per_device_train_batch_size=2,
+        gradient_accumulation_steps=8,
+        optim="paged_adamw_8bit",
+        warmup_steps=0.03,
+        learning_rate=2e-4,
+        fp16=True,
+        logging_steps=100,
+        push_to_hub=False,
+        report_to='none',
+    ),
+    peft_config=lora_config,
+    formatting_func=generate_prompt,
+)
+
+trainer.train()
