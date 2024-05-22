@@ -14,4 +14,4 @@ def split_json_file(file_path, chunk_size):
             json.dump(chunk, f, ensure_ascii=False, indent=4)
 
 # 사용 예시
-split_json_file("/media/ksj/hd/code/merged_file.json", chunk_size=5000)
+split_json_file("/media/ksj/hd/merged_file.json", chunk_size=50000)
