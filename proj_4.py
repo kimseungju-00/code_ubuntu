@@ -33,7 +33,7 @@ def save_custom_pretrained(tokenizer, save_directory):
         f.write(out_str)
 
 # Load your JSON file
-dataset = load_dataset('json', data_files='/media/ksj/hd/merged_file_chunk_21.json')
+dataset = load_dataset('json', data_files='/media/ksj/hd/merged_file.json')
 # 또는 dataset = load_dataset('json', data_files='/media/ksj/hd/merged_file_chunk_0.json', field='데이터_필드_이름')
 
 # Use the entire dataset as the train dataset
